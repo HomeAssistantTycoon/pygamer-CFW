@@ -1,6 +1,7 @@
 #include "uf2.h"
-#include <string.h>
+#include <string.h>   // memcpy
 #include <stdbool.h>
+#include <stdint.h>
 
 // this actually generates less code than a function
 #define wait_ready() \
@@ -146,8 +147,8 @@ void flash_copy_from_qspi(uint32_t qspi_addr, uint32_t length)
         // Copy row from QSPI to buffer
         memcpy(row_buf, src, row_size);
 
-        // Write row to internal flash
-        flash_write_row((uint32_t*)dst_addr, (uint32_t*)row_buf);
+        // Write row to internal flash with safe casting
+        flash_write_row((uint32_t*)(uintptr_t)dst_addr, (uint32_t*)(uintptr_t)row_buf);
 
         src += row_size;
         dst_addr += row_size;
