@@ -1,13 +1,16 @@
 BOARD=zero
 -include Makefile.user
 include boards/$(BOARD)/board.mk
+
 CC=arm-none-eabi-gcc
+
 ifeq ($(CHIP_FAMILY), samd21)
 COMMON_FLAGS = -mthumb -mcpu=cortex-m0plus -Os -g -DSAMD21
 endif
 ifeq ($(CHIP_FAMILY), samd51)
 COMMON_FLAGS = -mthumb -mcpu=cortex-m4 -O2 -g -DSAMD51
 endif
+
 WFLAGS = \
 -Werror -Wall -Wstrict-prototypes \
 -Werror-implicit-function-declaration -Wpointer-arith -std=gnu99 \
@@ -19,6 +22,7 @@ WFLAGS = \
 -Wno-deprecated-declarations -Wpacked -Wredundant-decls -Wnested-externs \
 -Wlong-long -Wunreachable-code -Wcast-align \
 -Wno-missing-braces -Wno-overflow -Wno-shadow -Wno-attributes -Wno-packed -Wno-pointer-sign
+
 CFLAGS = $(COMMON_FLAGS) \
 -x c -c -pipe -nostdlib \
 --param max-inline-insns-single=500 \
@@ -45,11 +49,12 @@ LDFLAGS= $(COMMON_FLAGS) \
 -Wl,--warn-section-align \
 -save-temps -nostartfiles \
 --specs=nano.specs --specs=nosys.specs
+
 BUILD_PATH=build/$(BOARD)
+
 INCLUDES = -I. -I./inc -I./inc/preprocessor
 INCLUDES += -I./boards/$(BOARD) -Ilib/cmsis/CMSIS/Include -Ilib/usb_msc
 INCLUDES += -I$(BUILD_PATH)
-
 
 ifeq ($(CHIP_FAMILY), samd21)
 INCLUDES += -Ilib/samd21/samd21a/include/
@@ -83,7 +88,7 @@ SOURCES = $(COMMON_SRC) \
 	src/msc.c \
 	src/sam_ba_monitor.c \
 	src/uart_driver.c \
-	src/hid.c \
+	src/hid.c
 
 SELF_SOURCES = $(COMMON_SRC) \
 	src/selfmain.c
@@ -99,6 +104,7 @@ SELF_EXECUTABLE_INO=$(BUILD_PATH)/update-$(NAME).ino
 SUBMODULES = lib/uf2/README.md
 
 all: submodules dirs $(EXECUTABLE) $(SELF_EXECUTABLE)
+
 submodules: $(SUBMODULES)
 
 r: run
@@ -111,8 +117,6 @@ burn: all
 
 run: burn wait logs
 
-# This currently only works on macOS with a BMP debugger attached.
-# It's meant to flash the bootloader in a loop.
 BMP = $(shell ls -1 /dev/cu.usbmodem* | head -1)
 BMP_ARGS = --nx -ex "set mem inaccessible-by-default off" -ex "set confirm off" -ex "target extended-remote $(BMP)" -ex "mon tpwr enable" -ex "mon swdp_scan" -ex "attach 1"
 GDB = arm-none-eabi-gdb
@@ -212,7 +216,6 @@ drop-board: all
 	mkdir -p build/drop/$(BOARD)
 	cp $(SELF_EXECUTABLE) build/drop/$(BOARD)/
 	cp $(EXECUTABLE) build/drop/$(BOARD)/
-# .ino works only for SAMD21 right now; suppress for SAMD51
 ifeq ($(CHIP_FAMILY),samd21)
 	cp $(SELF_EXECUTABLE_INO) build/drop/$(BOARD)/
 	cp boards/$(BOARD)/board_config.h build/drop/$(BOARD)/
@@ -225,7 +228,9 @@ drop-pkg:
 	rm -rf build/uf2-samdx1-$(UF2_VERSION_BASE)
 
 all-boards:
-	for f in `cd boards; ls` ; do "$(MAKE)" BOARD=$$f drop-board || break; done
+	for f in $(shell ls boards); do \
+	    $(MAKE) BOARD=$$f drop-board || true; \
+	done
 
 drop: all-boards drop-pkg
 
