@@ -6,6 +6,7 @@ on:
       - 'qspi_slots/**'
       - 'src/loader/**'
   pull_request:
+  workflow_dispatch:   # 👈 This adds the manual run button
 
 jobs:
   test_loader:
