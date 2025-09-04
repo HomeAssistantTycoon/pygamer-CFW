@@ -5,7 +5,7 @@ import sys
 
 # Configuration
 QSPI_DIR = "qspi_slots"
-INTERNAL_FLASH_FILE = "internal_flash.bin"
+INTERNAL_FLASH_FILE = "internal_flash.uf2"  # renamed for clarity
 MAX_SLOTS = 4
 
 class GameSlot:
@@ -23,12 +23,18 @@ class Loader:
     def load_slots(self):
         self.slots = []
         for i in range(MAX_SLOTS):
-            path = os.path.join(self.qspi_dir, f"slot{i}.bin")
-            if os.path.exists(path):
-                name = f"Game {i}"
-                self.slots.append(GameSlot(name, path))
+            # Check for both .uf2 and .bin
+            uf2_path = os.path.join(self.qspi_dir, f"slot{i}.uf2")
+            bin_path = os.path.join(self.qspi_dir, f"slot{i}.bin")
+
+            if os.path.exists(uf2_path):
+                name = f"Game {i} (UF2)"
+                self.slots.append(GameSlot(name, uf2_path))
+            elif os.path.exists(bin_path):
+                name = f"Game {i} (BIN)"
+                self.slots.append(GameSlot(name, bin_path))
             else:
-                self.slots.append(GameSlot("Empty", path))
+                self.slots.append(GameSlot("Empty", f"slot{i}"))
 
     def list_games(self):
         print("Available slots:")
@@ -45,7 +51,7 @@ class Loader:
             print(f"Slot {slot_index} is empty!")
             return False
 
-        # Simulate copying to internal flash
+        # Simulate copying UF2/BIN to internal flash
         shutil.copyfile(slot.filename, INTERNAL_FLASH_FILE)
         print(f"Loaded '{slot.name}' to {INTERNAL_FLASH_FILE}")
         return self.verify_internal_flash(slot.filename)
@@ -67,7 +73,6 @@ if __name__ == "__main__":
     loader = Loader()
     loader.list_games()
 
-    # Default: load slot 0
     slot_to_load = "0"
     if len(sys.argv) > 1:
         slot_to_load = sys.argv[1]
