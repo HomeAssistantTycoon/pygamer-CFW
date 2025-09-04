@@ -1,6 +1,7 @@
 import os
 import shutil
 import hashlib
+import sys
 
 # Configuration
 QSPI_DIR = "qspi_slots"
@@ -50,7 +51,6 @@ class Loader:
         return self.verify_internal_flash(slot.filename)
 
     def verify_internal_flash(self, source_file):
-        # Checksum comparison
         def checksum(file_path):
             with open(file_path, "rb") as f:
                 return hashlib.sha256(f.read()).hexdigest()
@@ -66,6 +66,21 @@ class Loader:
 if __name__ == "__main__":
     loader = Loader()
     loader.list_games()
-    
-    # Example: load slot 0
-    loader.load_game(0)
+
+    # Default: load slot 0
+    slot_to_load = "0"
+    if len(sys.argv) > 1:
+        slot_to_load = sys.argv[1]
+
+    if slot_to_load == "all":
+        print("\nRunning loop test of all slots...\n")
+        for i in range(MAX_SLOTS):
+            print(f"--- Testing slot {i} ---")
+            loader.load_game(i)
+            print()
+    else:
+        try:
+            slot_index = int(slot_to_load)
+            loader.load_game(slot_index)
+        except ValueError:
+            print("Invalid argument, must be 0–3 or 'all'")
