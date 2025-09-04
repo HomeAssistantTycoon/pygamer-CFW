@@ -1,0 +1,23 @@
+name: Loader Simulation Test
+
+on:
+  push:
+    paths:
+      - 'qspi_slots/**'
+      - 'src/loader/**'
+  pull_request:
+
+jobs:
+  test_loader:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+
+      - name: Run Loader Simulation
+        run: python3 src/loader/loader.py
