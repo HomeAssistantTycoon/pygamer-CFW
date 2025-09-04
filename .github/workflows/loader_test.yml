@@ -1,12 +1,12 @@
 name: Loader Simulation Test
 
 on:
-  push:
-    paths:
-      - 'qspi_slots/**'
-      - 'src/loader/**'
-  pull_request:
-  workflow_dispatch:   # 👈 This adds the manual run button
+  workflow_dispatch:
+    inputs:
+      slot:
+        description: 'Slot index to load (0–3) or "all" to test all slots'
+        required: true
+        default: '0'
 
 jobs:
   test_loader:
@@ -21,4 +21,4 @@ jobs:
           python-version: 3.11
 
       - name: Run Loader Simulation
-        run: python3 src/loader/loader.py
+        run: python3 src/loader/loader.py ${{ github.event.inputs.slot }}
