@@ -2,23 +2,50 @@ import os
 import shutil
 import hashlib
 import sys
+import re
+import json
 
 QSPI_DIR = "qspi_slots"
 INTERNAL_FLASH_FILE = "internal_flash.uf2"
 MAX_SLOTS = 4
+
+def extract_uf2_title(path):
+    """Try to extract a title from a UF2 file, fallback to None if not found."""
+    try:
+        with open(path, "rb") as f:
+            data = f.read(64 * 1024)  # scan first 64 KB
+        text = data.decode("utf-8", errors="ignore")
+
+        # look for "name":"GameName"
+        match = re.search(r'"name"\s*:\s*"([^"]+)"', text)
+        if match:
+            return match.group(1)
+
+        # look for "title":"GameName"
+        match = re.search(r'"title"\s*:\s*"([^"]+)"', text)
+        if match:
+            return match.group(1)
+
+    except Exception:
+        pass
+    return None
 
 class GameSlot:
     def __init__(self, index, filename):
         self.index = index
         self.filename = filename
         self.size = os.path.getsize(filename) if (filename and os.path.exists(filename)) else 0
-        if self.size == 0:
-            self.name = "Empty"
-        else:
+        self.name = "Empty"
+
+        if self.size > 0:
             ext = os.path.splitext(filename)[1].lower()
             base = os.path.basename(filename)
             if ext == ".uf2":
-                self.name = f"{base} (UF2)"
+                title = extract_uf2_title(filename)
+                if title:
+                    self.name = f"{title} (UF2)"
+                else:
+                    self.name = f"{base} (UF2)"
             elif ext == ".bin":
                 self.name = f"{base} (BIN)"
             else:
@@ -72,7 +99,6 @@ if __name__ == "__main__":
     loader = Loader()
     loader.show_menu()
 
-    # Default to slot 0
     choice = "0"
     if len(sys.argv) > 1:
         choice = sys.argv[1]
@@ -81,14 +107,13 @@ if __name__ == "__main__":
         print("\nRunning loop test of all slots...\n")
         for i in range(MAX_SLOTS):
             print(f"--- Testing slot {i} ---")
-            loader.load_game(i)
+            ok = loader.load_game(i)
+            print("Verification successful!" if ok else "Verification failed!")
             print()
     else:
         try:
             idx = int(choice)
-            if loader.load_game(idx):
-                print("Verification successful!")
-            else:
-                print("Verification failed or empty slot.")
+            ok = loader.load_game(idx)
+            print("Verification successful!" if ok else "Verification failed or empty slot.")
         except ValueError:
             print("Invalid argument, must be 0–3 or 'all'")
