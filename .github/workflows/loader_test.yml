@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       slot:
-        description: 'Slot index to load (0–3) or "all" to test all slots'
+        description: "Slot to test (0–3 or 'all')"
         required: true
-        default: '0'
+        default: "all"
 
 jobs:
   test_loader:
