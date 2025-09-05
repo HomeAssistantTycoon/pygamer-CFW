@@ -3,47 +3,115 @@ import shutil
 import hashlib
 import sys
 import re
+import json
 
 # Configuration
 QSPI_DIR = "qspi_slots"
-INTERNAL_FLASH_FILE = "internal_flash.uf2"  # renamed for clarity
+INTERNAL_FLASH_FILE = "internal_flash.uf2"
 MAX_SLOTS = 4
 
 def extract_uf2_title(path):
     """
-    Try to extract the game title from a MakeCode UF2 file.
-    Looks for a "name":"..." field in the first 16 KB.
-    Returns None if not found.
+    Try multiple heuristics to extract a human-readable title from a UF2 file.
+    Returns a string title or None if nothing credible is found.
     """
     try:
+        size = os.path.getsize(path)
+        # read up to the first 1 MiB (UF2s are typically <1MB). This is safe for CI.
+        read_size = min(size, 1024 * 1024)
         with open(path, "rb") as f:
-            data = f.read(16 * 1024)  # only scan the first 16 KB
-            try:
-                text = data.decode("utf-8", errors="ignore")
-            except UnicodeDecodeError:
-                return None
-            match = re.search(r'"name"\s*:\s*"([^"]+)"', text)
-            if match:
-                return match.group(1)
+            data = f.read(read_size)
     except Exception as e:
-        print(f"Error reading {path}: {e}")
+        if os.getenv("LOADER_DEBUG"):
+            print(f"DEBUG: failed to open/read {path}: {e}")
+        return None
+
+    # decode as text ignoring errors
+    text = data.decode("utf-8", errors="ignore")
+
+    # common JSON keys used for project names in MakeCode/pxt metadata
+    patterns = [
+        r'"name"\s*:\s*"([^"]{2,100})"',           # "name":"My Game"
+        r'"projectName"\s*:\s*"([^"]{2,100})"',    # "projectName":"My Game"
+        r'"title"\s*:\s*"([^"]{2,100})"',          # "title":"My Game"
+        r'projectName":"([^"]{2,100})"',
+        r'name":"([^"]{2,100})"'
+    ]
+
+    for p in patterns:
+        m = re.search(p, text, re.IGNORECASE)
+        if m:
+            raw = m.group(1)
+            # Use JSON loader to properly unescape sequences if needed
+            try:
+                cleaned = json.loads('"' + raw.replace('"', '\\"') + '"')
+            except Exception:
+                cleaned = raw
+            if os.getenv("LOADER_DEBUG"):
+                print(f"DEBUG: pattern match for {p!r} => {cleaned!r}")
+            return cleaned
+
+    # Try to find small JSON objects that contain "name" and parse them
+    # We'll search for short {...} snippets so we don't try to parse the whole file.
+    try:
+        json_objs = re.findall(r'\{[^}]{0,1200}\}', text)
+        for o in json_objs:
+            if '"name"' in o.lower() or 'projectname' in o.lower() or '"title"' in o.lower():
+                try:
+                    j = json.loads(o)
+                    for k in ("name", "projectName", "title"):
+                        if k in j and isinstance(j[k], str) and len(j[k].strip()) > 1:
+                            title = j[k].strip()
+                            if os.getenv("LOADER_DEBUG"):
+                                print(f"DEBUG: found JSON object title => {title!r}")
+                            return title
+                except Exception:
+                    # parsing failed; ignore and continue
+                    pass
+    except Exception as e:
+        if os.getenv("LOADER_DEBUG"):
+            print(f"DEBUG: JSON object search error: {e}")
+
+    # Heuristic fallback: if the UF2 contains 'makecode' or 'pxt', try to pick
+    # a plausible printable substring (shortest reasonable human string).
+    lower = text.lower()
+    if "makecode" in lower or "pxt" in lower:
+        # find candidate runs of printable characters
+        candidates = re.findall(r'([A-Za-z0-9 \-\_]{4,80})', text)
+        for c in candidates:
+            c_strip = c.strip()
+            if len(c_strip) > 3 and not c_strip.lower().startswith(("makecode", "pxt", "uf2")):
+                if os.getenv("LOADER_DEBUG"):
+                    print(f"DEBUG: heuristic candidate => {c_strip!r}")
+                return c_strip
+
+    # Nothing found
+    if os.getenv("LOADER_DEBUG"):
+        print(f"DEBUG: no title found inside {os.path.basename(path)}")
     return None
+
 
 class GameSlot:
     def __init__(self, index, filename):
         self.index = index
         self.filename = filename
-        self.size = os.path.getsize(filename) if os.path.exists(filename) else 0
+        self.size = os.path.getsize(filename) if (filename and os.path.exists(filename)) else 0
         self.name = "Empty"
         if self.size > 0:
-            if filename.endswith(".uf2"):
+            lower = filename.lower()
+            if lower.endswith(".uf2"):
                 title = extract_uf2_title(filename)
                 if title:
                     self.name = f"{title} (UF2)"
                 else:
+                    # If title extraction fails, fall back to a readable default
                     self.name = f"Game {index} (UF2)"
-            elif filename.endswith(".bin"):
+            elif lower.endswith(".bin"):
                 self.name = f"Game {index} (BIN)"
+            else:
+                # Unexpected extension: use basename
+                self.name = os.path.basename(filename)
+
 
 class Loader:
     def __init__(self, qspi_dir=QSPI_DIR):
@@ -62,6 +130,7 @@ class Loader:
             elif os.path.exists(bin_path):
                 self.slots.append(GameSlot(i, bin_path))
             else:
+                # store an empty GameSlot with no filename
                 self.slots.append(GameSlot(i, ""))
 
     def list_games(self):
@@ -96,6 +165,7 @@ class Loader:
         else:
             print("Verification failed!")
             return False
+
 
 if __name__ == "__main__":
     loader = Loader()
