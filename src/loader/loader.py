@@ -2,17 +2,48 @@ import os
 import shutil
 import hashlib
 import sys
+import re
 
 # Configuration
 QSPI_DIR = "qspi_slots"
 INTERNAL_FLASH_FILE = "internal_flash.uf2"  # renamed for clarity
 MAX_SLOTS = 4
 
+def extract_uf2_title(path):
+    """
+    Try to extract the game title from a MakeCode UF2 file.
+    Looks for a "name":"..." field in the first 16 KB.
+    Returns None if not found.
+    """
+    try:
+        with open(path, "rb") as f:
+            data = f.read(16 * 1024)  # only scan the first 16 KB
+            try:
+                text = data.decode("utf-8", errors="ignore")
+            except UnicodeDecodeError:
+                return None
+            match = re.search(r'"name"\s*:\s*"([^"]+)"', text)
+            if match:
+                return match.group(1)
+    except Exception as e:
+        print(f"Error reading {path}: {e}")
+    return None
+
 class GameSlot:
-    def __init__(self, name, filename):
-        self.name = name
+    def __init__(self, index, filename):
+        self.index = index
         self.filename = filename
         self.size = os.path.getsize(filename) if os.path.exists(filename) else 0
+        self.name = "Empty"
+        if self.size > 0:
+            if filename.endswith(".uf2"):
+                title = extract_uf2_title(filename)
+                if title:
+                    self.name = f"{title} (UF2)"
+                else:
+                    self.name = f"Game {index} (UF2)"
+            elif filename.endswith(".bin"):
+                self.name = f"Game {index} (BIN)"
 
 class Loader:
     def __init__(self, qspi_dir=QSPI_DIR):
@@ -23,18 +54,15 @@ class Loader:
     def load_slots(self):
         self.slots = []
         for i in range(MAX_SLOTS):
-            # Check for both .uf2 and .bin
             uf2_path = os.path.join(self.qspi_dir, f"slot{i}.uf2")
             bin_path = os.path.join(self.qspi_dir, f"slot{i}.bin")
 
             if os.path.exists(uf2_path):
-                name = f"Game {i} (UF2)"
-                self.slots.append(GameSlot(name, uf2_path))
+                self.slots.append(GameSlot(i, uf2_path))
             elif os.path.exists(bin_path):
-                name = f"Game {i} (BIN)"
-                self.slots.append(GameSlot(name, bin_path))
+                self.slots.append(GameSlot(i, bin_path))
             else:
-                self.slots.append(GameSlot("Empty", f"slot{i}"))
+                self.slots.append(GameSlot(i, ""))
 
     def list_games(self):
         print("Available slots:")
