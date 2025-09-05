@@ -1,2 +1,4 @@
 The goal of this Pygamer Custom Firmware is to allow the storage of multiple games on the Pygamer. This is similar to GameSlots for the Meowbit. Currently, I do not own a Pygamer but I will get one soon. All tests are being run by myself via GitHub Actions. Currently this is not ready for usage on a Pygamer device, however I am nearing usability. Currently, if you put this on your Pygamer, it would likely either behave like normal or do nothing. This is built to NOT overwrite the bootloader, so it is unlikely that this would casue a half brick on your Pygamer device. If it does cause a half brick then their is a seven dollar fix called the ST link programmer. File an issue if you need assistance. Refer to this README for the cirrent status of the firmware.
 Current Status: Not ready
+#Bugs 🐜
+1. Strange bug where the menu occasionally gets the game name wrong. Possible fix: Base names off of file name. Priority: low
