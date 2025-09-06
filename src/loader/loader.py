@@ -9,9 +9,9 @@ QSPI_DIR = "qspi_slots"
 INTERNAL_FLASH_FILE = "internal_flash.uf2"
 MAX_SLOTS = 4
 
-DEBUG = os.getenv("LOADER_DEBUG") == "1"
+DEBUG_SLOT = os.getenv("LOADER_DEBUG")  # e.g. "slot3"
 
-def extract_uf2_title(path):
+def extract_uf2_title(path, slot_index=None):
     """Extract project title from MakeCode UF2 metadata, or None if not found."""
     try:
         size = os.path.getsize(path)
@@ -20,9 +20,9 @@ def extract_uf2_title(path):
             data = f.read(read_size)
         text = data.decode("utf-8", errors="ignore")
 
-        if DEBUG:
-            print(f"\n--- DEBUG DUMP for {os.path.basename(path)} ---")
-            print(text[:50000])  # dump first 50 KB
+        if DEBUG_SLOT == f"slot{slot_index}":
+            print(f"\n--- DEBUG DUMP for slot{slot_index} ({os.path.basename(path)}) ---")
+            print(text[:5000])  # dump first 5 KB
             print("--- END DEBUG DUMP ---\n")
 
         # Try multiple common keys with a strict JSON string match
@@ -30,9 +30,7 @@ def extract_uf2_title(path):
             match = re.search(rf'"{key}"\s*:\s*"([^"]{{1,100}})"', text, re.IGNORECASE)
             if match:
                 raw = match.group(1)
-                cleaned = re.sub(r"[^A-Za-z0-9 .,_\-!?:;'()]", "", raw)
-                if DEBUG:
-                    print(f"DEBUG: matched key={key}, raw={raw!r}, cleaned={cleaned!r}")
+                cleaned = re.sub(r"[^A-Za-z0-9 .,_\\-!?:;'()]", "", raw)
                 return cleaned.strip()
 
         # Try parsing short JSON objects that contain those keys
@@ -44,17 +42,12 @@ def extract_uf2_title(path):
                     for key in ("name", "title", "projectName", "displayName", "comment"):
                         if key in j and isinstance(j[key], str):
                             raw = j[key]
-                            cleaned = re.sub(r"[^A-Za-z0-9 .,_\-!?:;'()]", "", raw)
-                            if DEBUG:
-                                print(f"DEBUG: parsed JSON object key={key}, raw={raw!r}, cleaned={cleaned!r}")
+                            cleaned = re.sub(r"[^A-Za-z0-9 .,_\\-!?:;'()]", "", raw)
                             return cleaned.strip()
-                except Exception as e:
-                    if DEBUG:
-                        print(f"DEBUG: JSON parse failed: {e}")
+                except Exception:
                     continue
-    except Exception as e:
-        if DEBUG:
-            print(f"DEBUG: extract_uf2_title error: {e}")
+    except Exception:
+        pass
     return None
 
 class GameSlot:
@@ -68,7 +61,7 @@ class GameSlot:
             ext = os.path.splitext(filename)[1].lower()
             base = os.path.basename(filename)
             if ext == ".uf2":
-                title = extract_uf2_title(filename)
+                title = extract_uf2_title(filename, slot_index=index)
                 if title:
                     self.name = f"{title} (UF2)"
                 else:
