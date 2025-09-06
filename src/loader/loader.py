@@ -22,7 +22,10 @@ def extract_uf2_title(path):
         for key in ("name", "title", "projectName"):
             match = re.search(rf'"{key}"\s*:\s*"([^"]+)"', text, re.IGNORECASE)
             if match:
-                return match.group(1).strip()
+                raw = match.group(1)
+                # Strip non-printable characters
+                cleaned = "".join(c for c in raw if 32 <= ord(c) <= 126)
+                return cleaned.strip()
 
         # Try parsing short JSON objects that contain those keys
         objs = re.findall(r'\{[^}]{0,500}\}', text)
@@ -32,7 +35,9 @@ def extract_uf2_title(path):
                     j = json.loads(o)
                     for key in ("name", "title", "projectName"):
                         if key in j and isinstance(j[key], str):
-                            return j[key].strip()
+                            raw = j[key]
+                            cleaned = "".join(c for c in raw if 32 <= ord(c) <= 126)
+                            return cleaned.strip()
                 except Exception:
                     continue
     except Exception:
