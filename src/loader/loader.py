@@ -9,6 +9,8 @@ QSPI_DIR = "qspi_slots"
 INTERNAL_FLASH_FILE = "internal_flash.uf2"
 MAX_SLOTS = 4
 
+DEBUG = os.getenv("LOADER_DEBUG") == "1"
+
 def extract_uf2_title(path):
     """Extract project title from MakeCode UF2 metadata, or None if not found."""
     try:
@@ -18,30 +20,41 @@ def extract_uf2_title(path):
             data = f.read(read_size)
         text = data.decode("utf-8", errors="ignore")
 
+        if DEBUG:
+            print(f"\n--- DEBUG DUMP for {os.path.basename(path)} ---")
+            print(text[:50000])  # dump first 50 KB
+            print("--- END DEBUG DUMP ---\n")
+
         # Try multiple common keys with a strict JSON string match
-        for key in ("name", "title", "projectName"):
+        for key in ("name", "title", "projectName", "displayName", "comment"):
             match = re.search(rf'"{key}"\s*:\s*"([^"]{{1,100}})"', text, re.IGNORECASE)
             if match:
                 raw = match.group(1)
-                # Keep only normal printable characters
                 cleaned = re.sub(r"[^A-Za-z0-9 .,_\-!?:;'()]", "", raw)
+                if DEBUG:
+                    print(f"DEBUG: matched key={key}, raw={raw!r}, cleaned={cleaned!r}")
                 return cleaned.strip()
 
         # Try parsing short JSON objects that contain those keys
         objs = re.findall(r'\{[^}]{0,500}\}', text)
         for o in objs:
-            if any(k in o.lower() for k in ("name", "title", "projectname")):
+            if any(k in o.lower() for k in ("name", "title", "projectname", "displayname", "comment")):
                 try:
                     j = json.loads(o)
-                    for key in ("name", "title", "projectName"):
+                    for key in ("name", "title", "projectName", "displayName", "comment"):
                         if key in j and isinstance(j[key], str):
                             raw = j[key]
                             cleaned = re.sub(r"[^A-Za-z0-9 .,_\-!?:;'()]", "", raw)
+                            if DEBUG:
+                                print(f"DEBUG: parsed JSON object key={key}, raw={raw!r}, cleaned={cleaned!r}")
                             return cleaned.strip()
-                except Exception:
+                except Exception as e:
+                    if DEBUG:
+                        print(f"DEBUG: JSON parse failed: {e}")
                     continue
-    except Exception:
-        pass
+    except Exception as e:
+        if DEBUG:
+            print(f"DEBUG: extract_uf2_title error: {e}")
     return None
 
 class GameSlot:
