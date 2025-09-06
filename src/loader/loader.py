@@ -18,13 +18,13 @@ def extract_uf2_title(path):
             data = f.read(read_size)
         text = data.decode("utf-8", errors="ignore")
 
-        # Try multiple common keys
+        # Try multiple common keys with a strict JSON string match
         for key in ("name", "title", "projectName"):
-            match = re.search(rf'"{key}"\s*:\s*"([^"]+)"', text, re.IGNORECASE)
+            match = re.search(rf'"{key}"\s*:\s*"([^"]{{1,100}})"', text, re.IGNORECASE)
             if match:
                 raw = match.group(1)
-                # Strip non-printable characters
-                cleaned = "".join(c for c in raw if 32 <= ord(c) <= 126)
+                # Keep only normal printable characters
+                cleaned = re.sub(r"[^A-Za-z0-9 .,_\-!?:;'()]", "", raw)
                 return cleaned.strip()
 
         # Try parsing short JSON objects that contain those keys
@@ -36,7 +36,7 @@ def extract_uf2_title(path):
                     for key in ("name", "title", "projectName"):
                         if key in j and isinstance(j[key], str):
                             raw = j[key]
-                            cleaned = "".join(c for c in raw if 32 <= ord(c) <= 126)
+                            cleaned = re.sub(r"[^A-Za-z0-9 .,_\-!?:;'()]", "", raw)
                             return cleaned.strip()
                 except Exception:
                     continue
