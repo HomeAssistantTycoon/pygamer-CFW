@@ -20,7 +20,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
 
-      - name: Run Loader Simulation (Debug Slot 3 Only)
+      - name: Run Loader Simulation (Debug Slot 3)
         env:
           LOADER_DEBUG: 'slot3'
         run: |
