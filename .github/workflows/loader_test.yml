@@ -1,24 +1,27 @@
-name: Loader Simulation Test
+name: Loader Test
 
 on:
   workflow_dispatch:
-    inputs:
-      slot:
-        description: "Slot to test (0–3 or 'all')"
-        required: true
-        default: "all"
 
 jobs:
-  test_loader:
+  loader-test:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: 3.11
+          python-version: '3.x'
 
-      - name: Run Loader Simulation
-        run: python3 src/loader/loader.py ${{ github.event.inputs.slot }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+
+      - name: Run Loader Simulation (Debug Slot 3 Only)
+        env:
+          LOADER_DEBUG: 'slot3'
+        run: |
+          python3 src/loader/loader.py all
