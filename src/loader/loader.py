@@ -15,17 +15,28 @@ def extract_uf2_title(path, slot_index=None):
     """Extract project title from MakeCode UF2 metadata, or None if not found."""
     try:
         size = os.path.getsize(path)
-        read_size = min(size, 1024 * 1024)  # scan up to 1 MB
+        blocks = []
+
+        # Always read first 1 MB
         with open(path, "rb") as f:
-            data = f.read(read_size)
-        text = data.decode("utf-8", errors="ignore")
+            head = f.read(min(size, 1024 * 1024))
+            blocks.append(head)
+
+            # Also read last 1 MB if the file is bigger than that
+            if size > 1024 * 1024:
+                f.seek(max(0, size - 1024 * 1024))
+                tail = f.read(1024 * 1024)
+                blocks.append(tail)
+
+        # Combine both into one big text string
+        text = "".join(b.decode("utf-8", errors="ignore") for b in blocks)
 
         if DEBUG_SLOT == f"slot{slot_index}":
             print(f"\n--- DEBUG DUMP for slot{slot_index} ({os.path.basename(path)}) ---")
-            print(text[:5000])  # dump first 5 KB
+            print(text[:5000])  # just 5 KB max
             print("--- END DEBUG DUMP ---\n")
 
-        # Try multiple common keys with a strict JSON string match
+        # Look for common title keys
         for key in ("name", "title", "projectName", "displayName", "comment"):
             match = re.search(rf'"{key}"\s*:\s*"([^"]{{1,100}})"', text, re.IGNORECASE)
             if match:
@@ -33,7 +44,7 @@ def extract_uf2_title(path, slot_index=None):
                 cleaned = re.sub(r"[^A-Za-z0-9 .,_\\-!?:;'()]", "", raw)
                 return cleaned.strip()
 
-        # Try parsing short JSON objects that contain those keys
+        # Try parsing JSON-like objects
         objs = re.findall(r'\{[^}]{0,500}\}', text)
         for o in objs:
             if any(k in o.lower() for k in ("name", "title", "projectname", "displayname", "comment")):
