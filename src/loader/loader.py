@@ -10,22 +10,31 @@ INTERNAL_FLASH_FILE = "internal_flash.uf2"
 MAX_SLOTS = 4
 
 def extract_uf2_title(path):
-    """Try to extract a title from a UF2 file, fallback to None if not found."""
+    """Extract project title from MakeCode UF2 metadata, or None if not found."""
     try:
+        size = os.path.getsize(path)
+        read_size = min(size, 1024 * 1024)  # scan up to 1 MB
         with open(path, "rb") as f:
-            data = f.read(64 * 1024)  # scan first 64 KB
+            data = f.read(read_size)
         text = data.decode("utf-8", errors="ignore")
 
-        # look for "name":"GameName"
-        match = re.search(r'"name"\s*:\s*"([^"]+)"', text)
-        if match:
-            return match.group(1)
+        # Try multiple common keys
+        for key in ("name", "title", "projectName"):
+            match = re.search(rf'"{key}"\s*:\s*"([^"]+)"', text, re.IGNORECASE)
+            if match:
+                return match.group(1).strip()
 
-        # look for "title":"GameName"
-        match = re.search(r'"title"\s*:\s*"([^"]+)"', text)
-        if match:
-            return match.group(1)
-
+        # Try parsing short JSON objects that contain those keys
+        objs = re.findall(r'\{[^}]{0,500}\}', text)
+        for o in objs:
+            if any(k in o.lower() for k in ("name", "title", "projectname")):
+                try:
+                    j = json.loads(o)
+                    for key in ("name", "title", "projectName"):
+                        if key in j and isinstance(j[key], str):
+                            return j[key].strip()
+                except Exception:
+                    continue
     except Exception:
         pass
     return None
