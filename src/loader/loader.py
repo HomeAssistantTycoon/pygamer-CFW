@@ -9,31 +9,30 @@ QSPI_DIR = "qspi_slots"
 INTERNAL_FLASH_FILE = "internal_flash.uf2"
 MAX_SLOTS = 4
 
-DEBUG_SLOT = os.getenv("LOADER_DEBUG")  # e.g. "slot3"
+# Debug disabled unless you set LOADER_DEBUG=1 manually
+DEBUG = os.getenv("LOADER_DEBUG") == "1"
 
-def extract_uf2_title(path, slot_index=None):
-    """Extract project title from MakeCode UF2 metadata, or fallback to raw text search."""
+def extract_uf2_title(path):
+    """Extract project title from MakeCode UF2 metadata, or None if not found."""
     try:
         size = os.path.getsize(path)
+        read_size = min(size, 1024 * 1024)  # scan up to 1 MB
         with open(path, "rb") as f:
-            data = f.read()
-
+            data = f.read(read_size)
         text = data.decode("utf-8", errors="ignore")
 
-        if DEBUG_SLOT == f"slot{slot_index}":
-            print(f"\n--- DEBUG DUMP for slot{slot_index} ({os.path.basename(path)}) ---")
-            print(text[:5000])
+        if DEBUG:
+            print(f"\n--- DEBUG DUMP for {os.path.basename(path)} ---")
+            print(text[:50000])  # dump first 50 KB
             print("--- END DEBUG DUMP ---\n")
 
-        # Step 1: Look for JSON metadata
+        # Try multiple common keys with a loose regex
         for key in ("name", "title", "projectName", "displayName", "comment"):
-            match = re.search(rf'"{key}"\s*:\s*"([^"]{{1,100}})"', text, re.IGNORECASE)
+            match = re.search(rf'"{key}"\s*:\s*"([^"]+)"', text, re.IGNORECASE)
             if match:
-                raw = match.group(1)
-                cleaned = re.sub(r"[^A-Za-z0-9 .,_\\-!?:;'()]", "", raw)
-                return cleaned.strip()
+                return match.group(1).strip()
 
-        # Step 2: Parse small JSON fragments
+        # Try parsing short JSON objects that contain those keys
         objs = re.findall(r'\{[^}]{0,500}\}', text)
         for o in objs:
             if any(k in o.lower() for k in ("name", "title", "projectname", "displayname", "comment")):
@@ -41,17 +40,9 @@ def extract_uf2_title(path, slot_index=None):
                     j = json.loads(o)
                     for key in ("name", "title", "projectName", "displayName", "comment"):
                         if key in j and isinstance(j[key], str):
-                            raw = j[key]
-                            cleaned = re.sub(r"[^A-Za-z0-9 .,_\\-!?:;'()]", "", raw)
-                            return cleaned.strip()
+                            return j[key].strip()
                 except Exception:
                     continue
-
-        # Step 3: Fallback — scan for readable text sequences
-        candidates = re.findall(r"[A-Za-z0-9 .,_\\-!?:;'()]{10,}", text)
-        for c in candidates:
-            if "UF2" not in c and not c.startswith("slot"):
-                return c.strip()
     except Exception:
         pass
     return None
@@ -67,7 +58,7 @@ class GameSlot:
             ext = os.path.splitext(filename)[1].lower()
             base = os.path.basename(filename)
             if ext == ".uf2":
-                title = extract_uf2_title(filename, slot_index=index)
+                title = extract_uf2_title(filename)
                 if title:
                     self.name = f"{title} (UF2)"
                 else:
