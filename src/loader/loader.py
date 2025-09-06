@@ -12,31 +12,20 @@ MAX_SLOTS = 4
 DEBUG_SLOT = os.getenv("LOADER_DEBUG")  # e.g. "slot3"
 
 def extract_uf2_title(path, slot_index=None):
-    """Extract project title from MakeCode UF2 metadata, or None if not found."""
+    """Extract project title from MakeCode UF2 metadata, or fallback to raw text search."""
     try:
         size = os.path.getsize(path)
-        blocks = []
-
-        # Always read first 1 MB
         with open(path, "rb") as f:
-            head = f.read(min(size, 1024 * 1024))
-            blocks.append(head)
+            data = f.read()
 
-            # Also read last 1 MB if the file is bigger than that
-            if size > 1024 * 1024:
-                f.seek(max(0, size - 1024 * 1024))
-                tail = f.read(1024 * 1024)
-                blocks.append(tail)
-
-        # Combine both into one big text string
-        text = "".join(b.decode("utf-8", errors="ignore") for b in blocks)
+        text = data.decode("utf-8", errors="ignore")
 
         if DEBUG_SLOT == f"slot{slot_index}":
             print(f"\n--- DEBUG DUMP for slot{slot_index} ({os.path.basename(path)}) ---")
-            print(text[:5000])  # just 5 KB max
+            print(text[:5000])
             print("--- END DEBUG DUMP ---\n")
 
-        # Look for common title keys
+        # Step 1: Look for JSON metadata
         for key in ("name", "title", "projectName", "displayName", "comment"):
             match = re.search(rf'"{key}"\s*:\s*"([^"]{{1,100}})"', text, re.IGNORECASE)
             if match:
@@ -44,7 +33,7 @@ def extract_uf2_title(path, slot_index=None):
                 cleaned = re.sub(r"[^A-Za-z0-9 .,_\\-!?:;'()]", "", raw)
                 return cleaned.strip()
 
-        # Try parsing JSON-like objects
+        # Step 2: Parse small JSON fragments
         objs = re.findall(r'\{[^}]{0,500}\}', text)
         for o in objs:
             if any(k in o.lower() for k in ("name", "title", "projectname", "displayname", "comment")):
@@ -57,6 +46,12 @@ def extract_uf2_title(path, slot_index=None):
                             return cleaned.strip()
                 except Exception:
                     continue
+
+        # Step 3: Fallback — scan for readable text sequences
+        candidates = re.findall(r"[A-Za-z0-9 .,_\\-!?:;'()]{10,}", text)
+        for c in candidates:
+            if "UF2" not in c and not c.startswith("slot"):
+                return c.strip()
     except Exception:
         pass
     return None
